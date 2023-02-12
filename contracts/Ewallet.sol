@@ -26,10 +26,18 @@ contract Ewallet {
         string description;
     }
 
+    struct wheelTransaction {
+        uint256 toIndividualID;
+        uint256 fromTeamID;
+        uint256 amount;
+        string description;
+    }
+
     uint256 public individualIDCount = 0;
     uint256 public teamIDCount = 0;
     uint256 public globalIndividualID = 0;
     uint256 public constant teamSize = 5;
+    uint256 public miniPoolProfitTracker = 0;
 
     mapping(uint256 => IndividualCredentials) private IDToIndividualCredentials;
     mapping(uint256 => Individual) public IDToIndividual;
@@ -37,8 +45,10 @@ contract Ewallet {
     mapping(uint256 => uint256) public individualIDToTeamID;
     mapping(uint256 => uint256[]) public teamIDToTeamMembersID;
 
-    mapping(uint256 => Transaction[]) public individualToTransactions;
-    mapping(uint256 => Transaction[]) public teamToTransactions;
+    mapping(uint256 => Transaction[]) public individualToTransactions; // My Transactions (Outgoing)
+    mapping(uint256 => Transaction[]) public teamToTransactions; // My Team's Transactions (Incoming)
+    mapping(uint256 => wheelTransaction[]) public miniPoolIndividualToTransactions; // My Transactions (Incoming)
+    mapping(uint256 => wheelTransaction[]) public miniPoolTeamToTransactions; // My Team's Transactions (Outgoing)
 
     // Functions
     // addIndividual
@@ -50,6 +60,11 @@ contract Ewallet {
 
      modifier enoughBalance(uint256 _individualID, uint256 _amount) {
         require(IDToIndividual[_individualID].balance >= _amount);
+        _;
+    }
+
+    modifier lesserThanMiniPoolProfitTracker(uint256 amount) {
+        require(amount <= (miniPoolProfitTracker/2));
         _;
     }
 
@@ -81,13 +96,30 @@ contract Ewallet {
      }
 
      function transfer(uint256 _individualID, uint256 _teamID, string memory _description, uint256 _amount) public 
-     enoughBalance(_individualID, _amount){
+     enoughBalance(_individualID, _amount) {
         IDToIndividual[_individualID].balance = IDToIndividual[_individualID].balance - _amount;
         IDToTeam[_teamID].balance = IDToTeam[_teamID].balance + _amount;
         // record transaction related to every team and individual
         Transaction memory transaction = Transaction(_individualID, _teamID, _amount, _description);
         individualToTransactions[_individualID].push(transaction);
         teamToTransactions[_teamID].push(transaction);
+     }
+
+     function prizeTransfer(uint256 _individualID, uint256 _teamID, string memory _description, uint256 _amount) public {
+        IDToIndividual[_individualID].balance = IDToIndividual[_individualID].balance + _amount;
+        IDToTeam[_teamID].balance = IDToTeam[_teamID].balance - _amount;
+         // record transaction related to every team and individual
+        wheelTransaction memory wheeltransaction = wheelTransaction(_individualID, _teamID, _amount, _description);
+        miniPoolIndividualToTransactions[_individualID].push(wheeltransaction);
+        miniPoolTeamToTransactions[_teamID].push(wheeltransaction);
+     }
+
+     function addToMiniPoolProfit(uint256 _profit) public {
+        miniPoolProfitTracker = miniPoolProfitTracker + _profit;
+     }
+
+     function subtractFromMiniPoolProfit(uint256 _amount) public lesserThanMiniPoolProfitTracker(_amount) {
+        miniPoolProfitTracker = miniPoolProfitTracker - _amount;
      }
 
      function viewIndividualBalance(uint256 _individualID) public view returns(uint256){
@@ -126,8 +158,16 @@ contract Ewallet {
             return teamToTransactions[_teamID];
      }
 
+     function getMiniPoolTransactionsByTeamID(uint256 _teamID) public view returns(wheelTransaction[] memory){
+            return miniPoolTeamToTransactions[_teamID];
+     }
+
      function getTransactionsByIndividualID(uint256 _individualID) public view returns(Transaction[] memory){
             return individualToTransactions[_individualID];
+     }
+
+     function getMiniPoolTransactionsByIndividualID(uint256 _individualID) public view returns(wheelTransaction[] memory){
+            return miniPoolIndividualToTransactions[_individualID];
      }
 
      function getTeamSize(uint256 _teamID) public view returns (uint){
@@ -138,8 +178,16 @@ contract Ewallet {
     return individualToTransactions[_individualID].length;
     }
 
+    function getMiniPoolIndividualTransactionSize(uint256 _individualID) public view returns (uint){
+    return miniPoolIndividualToTransactions[_individualID].length;
+    }
+
     function getTeamTransactionSize(uint256 _teamID) public view returns (uint){
     return teamToTransactions[_teamID].length;
+    }
+
+    function getMiniPoolTeamTransactionSize(uint256 _teamID) public view returns (uint){
+    return miniPoolTeamToTransactions[_teamID].length;
     }
 
 
